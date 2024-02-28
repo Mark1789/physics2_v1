@@ -3,6 +3,9 @@ let circle = document.querySelector('.circle');
 let stick = document.querySelector('.stick');
 let areaCoords = area.getBoundingClientRect();
 let circleCoords = circle.getBoundingClientRect();
+let circleXcenterWindow = circleCoords.x + circleCoords.width/2;
+let circleYcenterWindow = circleCoords.y + circleCoords.height/2;
+
 
 // START шаблон для персонажей
 class Persona {
@@ -60,27 +63,6 @@ let enemy = new Persona({x: 100, y: 200, width: 30, height: 30, background: "ora
 enemy.create(30, 40);
 enemy.create(260, 10);
 
-// START move stick
-let circleXcenter = circle.offsetWidth/2;
-let circleYcenter = circle.offsetHeight/2;
-let circleXcenterWindow = circleCoords.x + circleCoords.width/2;
-let circleYcenterWindow = circleCoords.y + circleCoords.height/2;
-let stickXcenter = null;
-let stickYcenter = null;
-
-// вычисляем длинну стика от центра
-function calculateDiagonalLength(x1, y1, x2, y2) {
-  
-    const a = Math.abs(x2 - x1);
-    const b = Math.abs(y2 - y1);
-    
-    const diagonalLength = Math.sqrt(a*a + b*b);
-   
-    return [diagonalLength];
-}
-let diagonalLength;
-let angle;
-
 // берем начальные координаты при прикосновении с областью стика, чтобы сделать их нулевыми для дальнейшего приcваивания координатам героя
 let startX;
 let startY;
@@ -88,35 +70,33 @@ let startY;
 let endX = 0;
 let endY = 0;
 
-function moveStick (eventX, eventY) {
-  // get metrics stick
-  let stickCoords = stick.getBoundingClientRect();
+
+function calculateAngle(x, y) {
   
-  // calculate diagonal length and angle
-  [diagonalLength, angle] = calculateDiagonalLength(circleXcenterWindow, circleYcenterWindow, eventX, eventY);
+  let stickCoords = stick.getBoundingClientRect();
+ 
+  // вычисляем длинну диагонали от центра circle до центра касания пальца по стику
+  const a = Math.abs(x - circleXcenterWindow);
+  const b = Math.abs(y - circleYcenterWindow);
+  const diagonalLength = Math.sqrt(a*a + b*b);
   
   // с помощью тригонометрии получаем координатв окружности
   let dr = circle.offsetWidth/2 - stick.offsetWidth/2;
-  let dy = eventY - circleYcenterWindow;
-  let dx = eventX - circleXcenterWindow;
+  let dx = x - circleXcenterWindow;
+  let dy = y - circleYcenterWindow;
+ 
   if (diagonalLength < 50) {
     // calculate new coords stick
-    dx = eventX - circleCoords.x - stickCoords.width / 2;
-    dy = eventY - circleCoords.y - stickCoords.width / 2;
+    dx = x - circleCoords.x - stickCoords.width / 2;
+    dy = y - circleCoords.y - stickCoords.width / 2;
   } else {
     let a = Math.atan2(dy, dx);
     dx = Math.cos(a)*dr + dr;
     dy = Math.sin(a)*dr + dr;
   } 
- 
- // новые вычесленные координаты стика
-  stick.style.left = dx + 'px';
-  stick.style.top = dy + 'px';
   
-  // перемещение героя
-  hero.move(eventX - startX + endX + area.offsetWidth/2 - heroWidth/2, eventY - startY + endY + area.offsetHeight/2 - heroHeight/2);
+  return [dx, dy]
 }
-// END move stick
 
 // events listener
 circle.addEventListener('touchstart', (event) => {
@@ -124,20 +104,28 @@ circle.addEventListener('touchstart', (event) => {
     let touch = event.targetTouches[0];
     startX = touch.clientX; 
     startY = touch.clientY;
-    stick.style.left = touch.clientX - circleCoords.x - stick.offsetWidth/2 + 'px';
-    stick.style.top = touch.clientY - circleCoords.y - stick.offsetHeight/2 + 'px';
+    
+    [dx, dy] = calculateAngle(startX, startY);
+    stick.style.left = dx + 'px';
+    stick.style.top = dy + 'px';
 })
 
   circle.addEventListener('touchmove', (event) => {
     event.preventDefault();
     let touch = event.targetTouches[0];
-    moveStick(touch.clientX, touch.clientY);
+    
+    [dx, dy] = calculateAngle(touch.clientX, touch.clientY);
+ // новые вычесленные координаты стика
+    stick.style.left = dx + 'px';
+    stick.style.top = dy + 'px';
+    
+    hero.move(touch.clientX - startX + endX + area.offsetWidth/2 - heroWidth/2, touch.clientY - startY + endY + area.offsetHeight/2 - heroHeight/2);
   })
 
 circle.addEventListener('touchend', (event) => {
     event.preventDefault();
-    stick.style.left = circleXcenter - stick.offsetWidth/2 + 'px';
-    stick.style.top = circleYcenter - stick.offsetHeight/2 + 'px';
+    stick.style.left = circle.offsetWidth/2 - stick.offsetWidth/2 + 'px';
+    stick.style.top = circle.offsetHeight/2 - stick.offsetHeight/2 + 'px';
     
     endX = hero.x - area.offsetWidth/2 + heroWidth/2;
     endY = hero.y - area.offsetHeight/2 + heroHeight/2;
