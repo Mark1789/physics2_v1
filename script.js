@@ -5,16 +5,19 @@ let areaCoords = area.getBoundingClientRect();
 let circleCoords = circle.getBoundingClientRect();
 let circleXcenterWindow = circleCoords.x + circleCoords.width/2;
 let circleYcenterWindow = circleCoords.y + circleCoords.height/2;
-
+let speedHero = 1.5;
+let speedAutoMove = speedHero / 2.5;
+let speedProcess = speedHero * 6.5;
 
 // START шаблон для персонажей
 class Persona {
-  // {x, y, width, height, background, radius, classHtml}
+  // {x, y, width, height, background, radius, classHtml, rotate}
   constructor (options) {
     this.options = options;
     this.person = this.create(this.options.x, this.options.y);
     this.x = options.x;
     this.y = options.y;
+    this.rotate = options.rotate || 270;
   }
    get metrics () {
       return this.person.getBoundingClientRect();
@@ -22,40 +25,46 @@ class Persona {
   create(x, y) {
     let person = document.createElement('div');
     person.classList.add(`${this.options.clas}`)
-    person.style.cssText = `position:absolute; width: ${this.options.width || 10}px; height: ${this.options.height || 10}px; background: ${this.options.background || "red"}; border-radius: ${this.options.radius || 3}px; left: ${x}px; top: ${y}px`;
+    person.style.cssText = `position:absolute; width: ${this.options.width || 10}px; height: ${this.options.height || 10}px; background: ${this.options.background || "red"}; border-radius: ${this.options.radius || 3}px; left: ${x}px; top: ${y}px; transform: rotate(${this.options.rotate || 270}deg)`;
     area.insertAdjacentElement('afterbegin', person)
     return person;
   }
   move(x, y) {
-    
-    if (x + this.metrics.width + 10 > areaCoords.right) {
-      x = areaCoords.right - this.metrics.width - 10;
+    if (this.x + this.metrics.width > areaCoords.right) {
+      this.x = areaCoords.right - this.metrics.width;
     } 
-    if (x - areaCoords.left + 15 < areaCoords.left) {
-      x = 0;
+    if (this.x - areaCoords.left + 15 < areaCoords.left) {
+      this.x = 1;
     }
-    if (y - areaCoords.top + 15 < areaCoords.top) {
-      y = 0;
+    if (this.y - areaCoords.top + 15 < areaCoords.top) {
+      this.y = 1;
     }
-    if (y + this.metrics.height + 10 > areaCoords.bottom) {
-      y = areaCoords.bottom - this.metrics.height - 10;
+    if (this.y + this.metrics.height > areaCoords.bottom) {
+      this.y = areaCoords.bottom - this.metrics.height;
     } 
     
-    this.x = x;
-    this.y = y;
+    this.x += x * speedHero;
+    this.y += y * speedHero;
     
     this.person.style.left = this.x + 'px';
     this.person.style.top = this.y + 'px';
+  }
+  rotateAngle(angle) {
+    this.rotate += angle - this.rotate;
+    this.person.style.transform = `rotate(${this.rotate}deg)`;
   }
 }
 // END шаблон для персонажей
 
 // create hero
 let hero = new Persona({x: area.offsetWidth/2 - 10, y: area.offsetHeight/2 - 10, width: 30, height: 30, background: "lawngreen", radius: 5, clas: "hero"});
-hero.person.style.transition = '0.03s';
 let heroCssStyles = getComputedStyle(hero.person);
 let heroWidth = parseInt(heroCssStyles.width);
 let heroHeight = parseInt(heroCssStyles.height);
+let eyes = document.createElement('div');
+eyes.innerHTML = ':';
+eyes.classList.add('eyes');
+hero.person.insertAdjacentElement('afterbegin', eyes);
 
 // create enemy
 let enemy = new Persona({x: 100, y: 200, width: 30, height: 30, background: "orange", radius: 1, clas: "enemy"});
@@ -63,14 +72,9 @@ let enemy = new Persona({x: 100, y: 200, width: 30, height: 30, background: "ora
 enemy.create(30, 40);
 enemy.create(260, 10);
 
-// берем начальные координаты при прикосновении с областью стика, чтобы сделать их нулевыми для дальнейшего приcваивания координатам героя
-let startX;
-let startY;
-// получаем конечные координаты героя при отпускании стика, чтобы герой оставался на том же месте после нового движения стика
-let endX = 0;
-let endY = 0;
+let diagonalLength;
 
-
+// все расчёты стика и героя
 function calculateAngle(x, y) {
   
   let stickCoords = stick.getBoundingClientRect();
@@ -78,57 +82,78 @@ function calculateAngle(x, y) {
   // вычисляем длинну диагонали от центра circle до центра касания пальца по стику
   const a = Math.abs(x - circleXcenterWindow);
   const b = Math.abs(y - circleYcenterWindow);
-  const diagonalLength = Math.sqrt(a*a + b*b);
+  diagonalLength = Math.sqrt(a*a + b*b);
   
   // с помощью тригонометрии получаем координатв окружности
   let dr = circle.offsetWidth/2 - stick.offsetWidth/2;
   let dx = x - circleXcenterWindow;
   let dy = y - circleYcenterWindow;
- 
+  
+  // высисляем катангенс и координаты для перемещения героя
+  let catangens = Math.atan2(dy, dx);
+  let heroDx = Math.cos(catangens);
+  let heroDy = Math.sin(catangens);
+  // угол поворота для героя
+  let angle = (catangens * 180) / Math.PI;
+  if (angle < 0) angle += 360;
+  hero.rotateAngle(angle);
+  
   if (diagonalLength < 50) {
     // calculate new coords stick
     dx = x - circleCoords.x - stickCoords.width / 2;
     dy = y - circleCoords.y - stickCoords.width / 2;
   } else {
-    let a = Math.atan2(dy, dx);
-    dx = Math.cos(a)*dr + dr;
-    dy = Math.sin(a)*dr + dr;
+    dx = Math.cos(catangens)*dr + dr;
+    dy = Math.sin(catangens)*dr + dr;
   } 
   
-  return [dx, dy]
+  stick.style.left = dx + 'px';
+  stick.style.top = dy + 'px';
+  
+  return [heroDx, heroDy];
 }
 
-// events listener
-circle.addEventListener('touchstart', (event) => {
-    event.preventDefault();
-    let touch = event.targetTouches[0];
-    startX = touch.clientX; 
-    startY = touch.clientY;
-    
-    [dx, dy] = calculateAngle(startX, startY);
-    stick.style.left = dx + 'px';
-    stick.style.top = dy + 'px';
-})
+function heroAutoMove (x, y) {
+  let dx = x - circleXcenterWindow;
+  let dy = y - circleYcenterWindow;
+  
+  let catangens = Math.atan2(dy, dx);
+  let heroDx = Math.cos(catangens) * speedAutoMove;
+  let heroDy = Math.sin(catangens) * speedAutoMove;
+  
+  return [heroDx, heroDy];
+}
 
-  circle.addEventListener('touchmove', (event) => {
+// процесс
+let process;
+process = setInterval(() => {
+  // если стик упирается в окружность, то включаем автоход герою
+  if (diagonalLength >= 50) {
+    let stickCoords = stick.getBoundingClientRect();
+    
+    [heroDx, heroDy] = heroAutoMove (stickCoords.x + stickCoords.width/2, stickCoords.y + stickCoords.height/2);
+    
+    hero.move(heroDx, heroDy);
+  }
+}, speedProcess)
+
+// events listener
+  stick.addEventListener('touchmove', (event) => {
     event.preventDefault();
     let touch = event.targetTouches[0];
+   
+    [heroDx, heroDy] = calculateAngle(touch.clientX, touch.clientY);
     
-    [dx, dy] = calculateAngle(touch.clientX, touch.clientY);
- // новые вычесленные координаты стика
-    stick.style.left = dx + 'px';
-    stick.style.top = dy + 'px';
-    
-    hero.move(touch.clientX - startX + endX + area.offsetWidth/2 - heroWidth/2, touch.clientY - startY + endY + area.offsetHeight/2 - heroHeight/2);
+    if (diagonalLength < 50) {
+      hero.move(heroDx, heroDy);
+    }
   })
 
-circle.addEventListener('touchend', (event) => {
+stick.addEventListener('touchend', (event) => {
     event.preventDefault();
     stick.style.left = circle.offsetWidth/2 - stick.offsetWidth/2 + 'px';
     stick.style.top = circle.offsetHeight/2 - stick.offsetHeight/2 + 'px';
     
-    endX = hero.x - area.offsetWidth/2 + heroWidth/2;
-    endY = hero.y - area.offsetHeight/2 + heroHeight/2;
     diagonalLength = 0;
 })
 /*
@@ -138,4 +163,3 @@ area.addEventListener('pointerdown', (event) =>  {
   event.preventDefault();
 });
 */
-        
